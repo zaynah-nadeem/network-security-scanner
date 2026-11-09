@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Security Scanner & Firewall Visualizer</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f1f5f9;
+            margin: 0;
+            color: #1e293b;
+        }
+
+        header {
+            background: #14213d;
+            color: white;
+            padding: 25px;
+            text-align: center;
+        }
+
+        .container {
+            max-width: 1150px;
+            margin: 30px auto;
+            padding: 15px;
+        }
+
+        .card {
+            background: white;
+            padding: 25px;
+            margin-bottom: 25px;
+            border-radius: 12px;
+            box-shadow: 0 3px 12px #0001;
+        }
+
+        h2 { color: #14213d; }
+
+        label {
+            display: block;
+            margin-top: 15px;
+            font-weight: bold;
+        }
+
+        .hint {
+            font-size: 13px;
+            color: #64748b;
+            margin-top: 5px;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 11px;
+            margin-top: 7px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            box-sizing: border-box;
+        }
+
+        button {
+            background: #2563eb;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 6px;
+            margin-top: 18px;
+            cursor: pointer;
+        }
+
+        button:hover { background: #1d4ed8; }
+        button:disabled { background: #94a3b8; cursor: not-allowed; }
+
+        .small { padding: 10px 12px; margin-top: 0; }
+        .gray { background: #64748b; }
+        .gray:hover { background: #475569; }
+        .remove { background: #dc2626; }
+        .remove:hover { background: #b91c1c; }
+
+        .table-box { overflow-x: auto; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th, td {
+            padding: 12px;
+            border-bottom: 1px solid #ddd;
+            text-align: left;
+        }
+
+        th { background: #eff6ff; }
+
+        .badge {
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        .risk-High   { background: #fee2e2; color: #991b1b; }
+        .risk-Medium { background: #fef3c7; color: #92400e; }
+        .risk-Low    { background: #dbeafe; color: #1e40af; }
+        .risk-None   { background: #e2e8f0; color: #475569; }
+
+        .reason {
+            display: block;
+            font-size: 12px;
+            color: #64748b;
+            margin-top: 5px;
+        }
+
+        #rules { counter-reset: rule; }
+
+        .rule {
+            display: grid;
+            grid-template-columns: 60px repeat(4, 1fr) auto auto auto;
+            gap: 10px;
+            margin-top: 12px;
+            padding: 12px;
+            background: #f8fafc;
+            border-radius: 8px;
+            align-items: end;
+        }
+
+        .rule::before {
+            counter-increment: rule;
+            content: "Rule " counter(rule);
+            font-weight: bold;
+            padding-bottom: 12px;
+        }
+
+        .rule label { margin-top: 0; }
+
+        .message {
+            padding: 12px;
+            margin-top: 15px;
+            border-radius: 6px;
+        }
+
+        .info { background: #dbeafe; color: #1e40af; }
+
+        .flow {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 25px;
+        }
+
+        .node {
+            padding: 15px;
+            min-width: 110px;
+            border-radius: 8px;
+            background: #e2e8f0;
+            border: 2px solid transparent;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .node small {
+            display: block;
+            font-weight: normal;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+
+        .arrow { font-size: 22px; color: #64748b; }
+
+        .no-match { background: #f8fafc; border-color: #cbd5e1; }
+        .skipped  { opacity: 0.4; }
+
+        .allowed, .match-allow {
+            background: #dcfce7;
+            color: #166534;
+            border-color: #22c55e;
+        }
+
+        .blocked, .match-deny {
+            background: #fee2e2;
+            color: #991b1b;
+            border-color: #ef4444;
+        }
+
+        .legend {
+            text-align: center;
+            font-size: 13px;
+            color: #64748b;
+            margin-top: 15px;
+        }
+
+        @media (max-width: 800px) {
+            .rule { grid-template-columns: 1fr 1fr; }
+            .rule::before { grid-column: 1 / -1; padding-bottom: 0; }
+        }
+    </style>
+</head>
+
+<body>
+
+<header>
+    <h1>Network Security Scanner & Firewall Visualizer</h1>
+    <p>Scan local networks, find open ports and test firewall rules</p>
+</header>
+
+<div class="container">
+
+    <div class="card">
+
+        <h2>1. Network Scanner</h2>
+
+        <label for="target">Target (IP, hostname or network)</label>
+        <input id="target" value="127.0.0.1">
+        <div class="hint">
+            Examples: 127.0.0.1, localhost, 192.168.1.0/24 (max /24).
+            Only local/private networks are allowed.
+        </div>
+
+        <label for="scanType">Scan Type</label>
+        <select id="scanType">
+            <option value="connect">TCP Full Connect</option>
+            <option value="syn">TCP SYN (needs admin/root)</option>
+            <option value="udp">UDP (needs admin/root)</option>
+        </select>
+
+        <label for="ports">Ports</label>
+        <input id="ports" value="1-1024">
+        <div class="hint">
+            Examples: 22,80,443 or 1-1024. Max 2001 ports (100 for UDP).
+        </div>
+
+        <button id="scanButton" onclick="startScan()">Start Scan</button>
+
+        <p id="scanMessage"></p>
+
+        <div class="table-box">
+            <table>
+                <thead>
+                    <tr>
+                        <th>IP</th>
+                        <th>Port</th>
+                        <th>Protocol</th>
+                        <th>Service</th>
+                        <th>Version</th>
+                        <th>Status</th>
+                        <th>Risk</th>
+                        <th>Firewall</th>
+                    </tr>
+                </thead>
+
+                <tbody id="results">
+                    <tr><td colspan="8">No results yet.</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+
+    <div class="card" id="firewall">
+
+        <h2>2. Firewall Rule Simulator</h2>
+
+        <p>
+            Rules are checked from top to bottom. The first matching rule
+            decides. If no rule matches, the default policy is used.
+            Use ↑ and ↓ to change rule priority.
+        </p>
+
+        <div id="rules"></div>
+
+        <button onclick="addRule()">Add Firewall Rule</button>
+        <div class="hint">
+            IP: any, 192.168.1.10 or 192.168.1.0/24. Port: any, 80 or 20-25.
+        </div>
+
+        <label for="defaultPolicy">Default Policy (when no rule matches)</label>
+        <select id="defaultPolicy">
+            <option value="deny">DENY</option>
+            <option value="allow">ALLOW</option>
+        </select>
+
+        <h3>Test Network Traffic</h3>
+
+        <label for="trafficIp">Destination IP</label>
+        <input id="trafficIp" value="192.168.1.10">
+
+        <label for="trafficPort">Destination Port</label>
+        <input id="trafficPort" type="number" value="80" min="1" max="65535">
+
+        <label for="trafficProtocol">Protocol</label>
+        <select id="trafficProtocol">
+            <option value="tcp">TCP</option>
+            <option value="udp">UDP</option>
+        </select>
+
+        <button onclick="testTraffic()">Simulate Traffic</button>
+
+        <p id="firewallMessage"></p>
+
+        <h3>Traffic Flow Diagram</h3>
+
+        <div class="flow" id="flow">
+            <div class="node">Packet</div>
+            <div class="arrow">→</div>
+            <div class="node">Firewall Rules</div>
+            <div class="arrow">→</div>
+            <div class="node">Waiting</div>
+        </div>
+
+        <div class="legend">
+            Green = matched ALLOW &nbsp;|&nbsp; Red = matched DENY &nbsp;|&nbsp;
+            Outlined = checked, no match &nbsp;|&nbsp; Faded = not checked
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+
+function setMessage(id, text, type) {
+    const element = document.getElementById(id);
+    element.textContent = text;
+    element.className = "message " + type;
+}
+
+async function postJson(url, data) {
+    const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data)
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+        throw new Error(result.error);
+    }
+
+    return result;
+}
+
+async function startScan() {
+    const button = document.getElementById("scanButton");
+    const results = document.getElementById("results");
+
+    button.disabled = true;
+    setMessage("scanMessage", "Scanning... this can take a minute.", "info");
+
+    try {
+        const result = await postJson("/scan", {
+            target: document.getElementById("target").value,
+            scan_type: document.getElementById("scanType").value,
+            ports: document.getElementById("ports").value
+        });
+
+        results.innerHTML = "";
+
+        if (result.results.length === 0) {
+            results.innerHTML = "<tr><td colspan='8'>No port results found.</td></tr>";
+        }
+
+        result.results.forEach(item => {
+            results.appendChild(makeResultRow(item));
+        });
+
+        setMessage("scanMessage", result.message, "allowed");
+    }
+    catch (error) {
+        setMessage("scanMessage", error.message, "blocked");
+    }
+    finally {
+        button.disabled = false;
+    }
+}
+
+function makeResultRow(item) {
+    const row = document.createElement("tr");
+
+    const values = [
+        item.ip,
+        item.port,
+        item.protocol,
+        item.service,
+        (item.product + " " + item.version).trim() || "-",
+        item.status
+    ];
+
+    values.forEach(value => {
+        const cell = document.createElement("td");
+        cell.textContent = value;
+        row.appendChild(cell);
+    });
+
+    const riskCell = document.createElement("td");
+    const badge = document.createElement("span");
+    const reason = document.createElement("span");
+
+    badge.className = "badge risk-" + item.risk;
+    badge.textContent = item.risk;
+    reason.className = "reason";
+    reason.textContent = item.reason;
+
+    riskCell.append(badge, reason);
+    row.appendChild(riskCell);
+
+    const testCell = document.createElement("td");
+    const testButton = document.createElement("button");
+
+    testButton.className = "small gray";
+    testButton.textContent = "Test";
+    testButton.onclick = () => testScanResult(item);
+
+    testCell.appendChild(testButton);
+    row.appendChild(testCell);
+
+    return row;
+}
+
+function testScanResult(item) {
+    document.getElementById("trafficIp").value = item.ip;
+    document.getElementById("trafficPort").value = item.port;
+    document.getElementById("trafficProtocol").value = item.protocol.toLowerCase();
+
+    document.getElementById("firewall").scrollIntoView({ behavior: "smooth" });
+
+    testTraffic();
+}
+
+function addRule(action = "deny", ip = "any", port = "any", protocol = "any") {
+    const rule = document.createElement("div");
+    rule.className = "rule";
+
+    rule.innerHTML = `
+        <div>
+            <label>Action</label>
+            <select class="action">
+                <option value="allow">ALLOW</option>
+                <option value="deny">DENY</option>
+            </select>
+        </div>
+
+        <div>
+            <label>Destination IP</label>
+            <input class="ruleIp">
+        </div>
+
+        <div>
+            <label>Port</label>
+            <input class="rulePort">
+        </div>
+
+        <div>
+            <label>Protocol</label>
+            <select class="ruleProtocol">
+                <option value="any">ANY</option>
+                <option value="tcp">TCP</option>
+                <option value="udp">UDP</option>
+            </select>
+        </div>
+
+        <button class="small gray" title="Move up" onclick="moveRule(this, -1)">↑</button>
+        <button class="small gray" title="Move down" onclick="moveRule(this, 1)">↓</button>
+        <button class="small remove" onclick="this.parentElement.remove()">Remove</button>
+    `;
+
+    rule.querySelector(".action").value = action;
+    rule.querySelector(".ruleIp").value = ip;
+    rule.querySelector(".rulePort").value = port;
+    rule.querySelector(".ruleProtocol").value = protocol;
+
+    document.getElementById("rules").appendChild(rule);
+}
+
+function moveRule(button, direction) {
+    const rule = button.parentElement;
+    const list = rule.parentElement;
+
+    if (direction < 0 && rule.previousElementSibling) {
+        list.insertBefore(rule, rule.previousElementSibling);
+    }
+
+    if (direction > 0 && rule.nextElementSibling) {
+        list.insertBefore(rule.nextElementSibling, rule);
+    }
+}
+
+function getRules() {
+    const rows = document.querySelectorAll("#rules .rule");
+
+    return Array.from(rows).map(row => ({
+        action: row.querySelector(".action").value,
+        ip: row.querySelector(".ruleIp").value,
+        port: row.querySelector(".rulePort").value,
+        protocol: row.querySelector(".ruleProtocol").value
+    }));
+}
+
+async function testTraffic() {
+    const traffic = {
+        ip: document.getElementById("trafficIp").value,
+        port: document.getElementById("trafficPort").value,
+        protocol: document.getElementById("trafficProtocol").value
+    };
+
+    try {
+        const result = await postJson("/simulate", {
+            rules: getRules(),
+            default_policy: document.getElementById("defaultPolicy").value,
+            traffic: traffic
+        });
+
+        const type = result.decision === "ALLOW" ? "allowed" : "blocked";
+
+        setMessage(
+            "firewallMessage",
+            result.decision + ": " + result.explanation + " " + result.matched_rule,
+            type
+        );
+
+        drawFlow(traffic, result);
+    }
+    catch (error) {
+        setMessage("firewallMessage", error.message, "blocked");
+    }
+}
+
+function makeNode(title, detail, className) {
+    const node = document.createElement("div");
+    node.className = "node " + className;
+    node.textContent = title;
+
+    if (detail) {
+        const small = document.createElement("small");
+        small.textContent = detail;
+        node.appendChild(small);
+    }
+
+    return node;
+}
+
+function drawFlow(traffic, result) {
+    const flow = document.getElementById("flow");
+    const nodes = [];
+
+    nodes.push(makeNode(
+        "Packet",
+        traffic.protocol.toUpperCase() + " → " + traffic.ip + ":" + traffic.port,
+        ""
+    ));
+
+    result.trace.forEach(step => {
+        let className = "no-match";
+
+        if (step.status === "matched") {
+            className = step.action === "ALLOW" ? "match-allow" : "match-deny";
+        }
+
+        if (step.status === "skipped") {
+            className = "skipped";
+        }
+
+        nodes.push(makeNode(
+            "Rule " + step.rule,
+            step.description + " (" + step.status + ")",
+            className
+        ));
+    });
+
+    let defaultClass = "skipped";
+
+    if (result.used_default) {
+        defaultClass = result.decision === "ALLOW" ? "match-allow" : "match-deny";
+    }
+
+    nodes.push(makeNode("Default Policy", result.default_policy, defaultClass));
+
+    nodes.push(makeNode(
+        result.decision === "ALLOW" ? "ALLOWED ✔" : "BLOCKED ✖",
+        "",
+        result.decision === "ALLOW" ? "allowed" : "blocked"
+    ));
+
+    flow.innerHTML = "";
+
+    nodes.forEach((node, index) => {
+        if (index > 0) {
+            const arrow = document.createElement("div");
+            arrow.className = "arrow";
+            arrow.textContent = "→";
+            flow.appendChild(arrow);
+        }
+
+        flow.appendChild(node);
+    });
+}
+
+addRule("deny", "192.168.1.50", "any", "any");
+addRule("allow", "any", "80", "tcp");
+addRule("allow", "any", "443", "tcp");
+
+</script>
+
+</body>
+</html>
